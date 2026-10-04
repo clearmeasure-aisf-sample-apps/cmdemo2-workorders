@@ -1,0 +1,154 @@
+# Release of an App Service deployable (added by the demo-environment skill's add-demo-deployable.ps1 as release.yml).
+# After a green Build of master, it turns that build's published UI into a release candidate:
+#   - the zip <slug>-<deployable>.<version>.zip (the published app, as App Service runs it) in the Octopus built-in feed
+#   - a release <version> of the Octopus project <slug>-<deployable>; its lifecycle deploys it to the first environment
+# No registry and no Azure credentials: App Service runs the zip on its built-in .NET runtime, and Octopus deploys it.
+# The deployable that owns the database (repository variable OWNS_DATABASE = true: the system's first app) also pushes
+# the build's database package and its acceptance tests, as release.yml does for a container app; a second app that
+# shares the database pushes neither (the package IDs are the owner's).
+# The version is the Build run's MAJOR.MINOR.run_number, the same number build.yml stamps into the packages.
+# Credentials: GitHub OIDC to Octopus only (environment "release").
+name: Release
+
+on:
+  workflow_run:
+    workflows: ["Build"]
+    types: [completed]
+    branches: [master]
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  # The Octopus actions (push-package, create-release) look the space up by name, not by ID.
+  OCTOPUS_SPACE: ${{ vars.OCTOPUS_SPACE_NAME }}
+
+jobs:
+  # A docs-only change skips the heavy Build jobs (build.yml, job changes), so that run has no packages to release.
+  packages:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    outputs:
+      found: ${{ steps.find.outputs.found }}
+    steps:
+      - name: Find the build's packages
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          count=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}/artifacts" \
+            --jq '[.artifacts[] | select(.name == "churchbulletin-nuget-packages")] | length')
+          if [ "$count" -gt 0 ]; then echo "found=true" >> "$GITHUB_OUTPUT"; else echo "found=false" >> "$GITHUB_OUTPUT"; fi
+
+  release:
+    needs: packages
+    if: needs.packages.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v6.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $workflow = Get-Content -LiteralPath .github/workflows/build.yml -Raw
+          $major = [regex]::Match($workflow, '(?m)^\s*MAJOR_VERSION:\s*(\d+)').Groups[1].Value
+          $minor = [regex]::Match($workflow, '(?m)^\s*MINOR_VERSION:\s*(\d+)').Groups[1].Value
+          if (-not $major -or -not $minor) { throw 'MAJOR_VERSION and MINOR_VERSION not found in build.yml' }
+          "version=$major.$minor.${{ github.event.workflow_run.run_number }}" >> $env:GITHUB_OUTPUT
+
+      - name: Download the build's packages
+        uses: actions/download-artifact@v4
+        with:
+          name: churchbulletin-nuget-packages
+          path: ./packages
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Zip the published UI for App Service
+        shell: pwsh
+        env:
+          PACKAGE_ID: ${{ vars.SYSTEM_SLUG }}-${{ vars.DEPLOYABLE_NAME }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $package = Get-ChildItem -Path ./packages -Filter 'ChurchBulletin.UI.*.nupkg' | Select-Object -First 1
+          if (-not $package) { throw 'ChurchBulletin.UI package not found in the build artifact' }
+          Expand-Archive -LiteralPath $package.FullName -DestinationPath ./package-extract -Force
+          $dll = Get-ChildItem -Path ./package-extract -Filter 'ClearMeasure.Bootcamp.UI.Server.dll' -Recurse | Select-Object -First 1
+          if (-not $dll) { throw 'ClearMeasure.Bootcamp.UI.Server.dll not found in the UI package' }
+          New-Item -ItemType Directory -Path ./built, ./octopus-packages -Force | Out-Null
+          # -Force: on Linux, wildcards and Get-ChildItem skip dot-folders otherwise.
+          Copy-Item -Path (Get-ChildItem -LiteralPath $dll.DirectoryName -Force).FullName -Destination ./built -Recurse -Force
+          Get-ChildItem -Path ./built -Include '*.nuspec', '[Content_Types].xml', '*.psmdcp' -Recurse -Force | Remove-Item -Force
+          Remove-Item -Path ./built/_rels, ./built/package -Recurse -Force -ErrorAction SilentlyContinue
+          $target = "./octopus-packages/$env:PACKAGE_ID.$env:VERSION.zip"
+          Compress-Archive -Path (Get-ChildItem -LiteralPath ./built -Force).FullName -DestinationPath $target -CompressionLevel Optimal
+          "App Service package: $([Math]::Round((Get-Item $target).Length / 1MB)) MB" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Sign in to Octopus
+        uses: OctopusDeploy/login@v2
+        with:
+          server: ${{ vars.OCTOPUS_URL }}
+          service_account_id: ${{ vars.OCTOPUS_SERVICE_ACCOUNT_ID }}
+
+      - name: Push the App Service package
+        uses: OctopusDeploy/push-package-action@v3
+        with:
+          packages: octopus-packages/${{ vars.SYSTEM_SLUG }}-${{ vars.DEPLOYABLE_NAME }}.${{ steps.version.outputs.version }}.zip
+          overwrite_mode: IgnoreIfExists
+
+      # The build's acceptance-test package carries Playwright's Node driver for five platforms (about 1 GB unpacked).
+      # Octopus runs the tests on Linux x64 only: keep that driver, drop the rest and the coverage collector.
+      - name: Trim the acceptance-test package for Octopus
+        if: vars.OWNS_DATABASE == 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = '${{ steps.version.outputs.version }}'
+          $source = Get-ChildItem -Path ./packages -Filter "ChurchBulletin.AcceptanceTests.$version.nupkg" | Select-Object -First 1
+          if (-not $source) { throw 'ChurchBulletin.AcceptanceTests package not found in the build artifact' }
+          $work = Join-Path $env:RUNNER_TEMP 'acceptance-tests'
+          Expand-Archive -LiteralPath $source.FullName -DestinationPath $work -Force
+          # -Force everywhere: on Linux, wildcards and Get-ChildItem skip dot-folders such as .playwright otherwise.
+          Get-ChildItem -Path $work -Recurse -Directory -Force | Where-Object {
+              ($_.Parent.Name -eq 'node' -and $_.Parent.Parent.Name -eq '.playwright' -and $_.Name -ne 'linux-x64') -or
+              ($_.Name -in @('CodeCoverage', 'BlazorDebugProxy') -and $_.Parent.FullName -eq $work)
+          } | Remove-Item -Recurse -Force
+          Remove-Item -Path (Join-Path $work '_rels'), (Join-Path $work 'package') -Recurse -Force -ErrorAction SilentlyContinue
+          Get-ChildItem -Path $work -Include '*.nuspec', '[Content_Types].xml' -Recurse -Force | Remove-Item -Force
+          if (-not (Test-Path -LiteralPath (Join-Path $work '.playwright' 'node' 'linux-x64'))) { throw 'The Playwright driver for linux-x64 is missing from the acceptance-test package' }
+          $target = "./octopus-packages/ChurchBulletin.AcceptanceTests.$version.zip"
+          Compress-Archive -Path (Get-ChildItem -LiteralPath $work -Force).FullName -DestinationPath $target -CompressionLevel Optimal
+          "Acceptance tests: $([Math]::Round($source.Length / 1MB)) MB -> $([Math]::Round((Get-Item $target).Length / 1MB)) MB" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Push the database and acceptance-test packages
+        if: vars.OWNS_DATABASE == 'true'
+        uses: OctopusDeploy/push-package-action@v3
+        with:
+          packages: |
+            packages/ChurchBulletin.Database.${{ steps.version.outputs.version }}.nupkg
+            octopus-packages/ChurchBulletin.AcceptanceTests.${{ steps.version.outputs.version }}.zip
+          overwrite_mode: IgnoreIfExists
+
+      - name: Create the release
+        uses: OctopusDeploy/create-release-action@v3
+        with:
+          project: ${{ vars.SYSTEM_SLUG }}-${{ vars.DEPLOYABLE_NAME }}
+          release_number: ${{ steps.version.outputs.version }}
+          package_version: ${{ steps.version.outputs.version }}
+          ignore_existing: true
+          release_notes: "Build ${{ github.event.workflow_run.html_url }} of ${{ github.event.workflow_run.head_sha }}"
