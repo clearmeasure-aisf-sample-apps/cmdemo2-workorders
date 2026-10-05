@@ -188,6 +188,8 @@ jobs:
       # Publish code coverage
       - name: Publish Code Coverage
         uses: codecov/codecov-action@v4
+        # Coverage goes to an outside service; when it is unreachable the build still gates on its tests.
+        continue-on-error: true
         if: always()
         with:
           files: '**/build/test/**/In/**/coverage.cobertura.xml'
