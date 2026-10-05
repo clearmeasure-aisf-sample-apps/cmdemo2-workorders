@@ -7,8 +7,8 @@ namespace ClearMeasure.Bootcamp.UI.Server.LiveTelemetry;
 /// </summary>
 public sealed class LiveTelemetryCounters
 {
-    /// <summary>Length of the rolling window, in seconds.</summary>
-    public const int WindowSeconds = 60;
+    // Length of the rolling window, in seconds.
+    private const int WindowSeconds = 60;
 
     /// <summary>Latency samples kept per series; beyond this many in a minute the percentile uses the latest ones.</summary>
     internal const int LatencySampleCapacity = 4096;
@@ -16,6 +16,7 @@ public sealed class LiveTelemetryCounters
     private const long WindowMilliseconds = WindowSeconds * 1000L;
 
     private readonly TimeProvider _timeProvider;
+    private readonly DateTime _startedAt;
     private readonly Lock _gate = new();
     private readonly long[] _bucketSecond = new long[WindowSeconds];
     private readonly int[] _counts = new int[WindowSeconds * Counter.Count];
@@ -30,11 +31,8 @@ public sealed class LiveTelemetryCounters
         _timeProvider = timeProvider;
         Array.Fill(_bucketSecond, long.MinValue);
         var now = timeProvider.GetUtcNow().UtcTicks;
-        StartedAt = new DateTime(now - now % TimeSpan.TicksPerSecond, DateTimeKind.Utc);
+        _startedAt = new DateTime(now - now % TimeSpan.TicksPerSecond, DateTimeKind.Utc);
     }
-
-    /// <summary>When counting started (UTC, whole seconds).</summary>
-    public DateTime StartedAt { get; }
 
     /// <summary>
     /// Records a completed incoming request. Traffic durations feed the request percentile; pass null for
@@ -94,7 +92,7 @@ public sealed class LiveTelemetryCounters
         }
     }
 
-    /// <summary>Returns the counts of the last <see cref="WindowSeconds"/> seconds.</summary>
+    /// <summary>Returns the counts of the last 60 seconds.</summary>
     public LiveTelemetrySnapshot Snapshot()
     {
         var nowMs = NowMilliseconds();
@@ -126,7 +124,7 @@ public sealed class LiveTelemetryCounters
         var direct = totals[Counter.DirectTraffic];
         return new LiveTelemetrySnapshot(
             WindowSeconds,
-            StartedAt,
+            _startedAt,
             new RequestCounts(frontDoor + direct, frontDoor, direct, totals[Counter.TrafficErrors], requestP95),
             new ProbeCounts(totals[Counter.Probes], totals[Counter.FrontDoorProbes]),
             new SqlCounts(totals[Counter.SqlCommands], sqlP95),

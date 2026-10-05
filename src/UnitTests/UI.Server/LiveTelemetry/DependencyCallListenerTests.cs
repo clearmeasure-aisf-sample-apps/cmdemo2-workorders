@@ -9,6 +9,8 @@ namespace ClearMeasure.Bootcamp.UnitTests.UI.Server.LiveTelemetry;
 [TestFixture]
 public class DependencyCallListenerTests
 {
+    private static readonly HttpClient Client = new();
+
     private static readonly DateTimeOffset Start = new(2026, 10, 5, 23, 0, 0, TimeSpan.Zero);
 
     [Test]
@@ -126,19 +128,20 @@ public class DependencyCallListenerTests
         var port = FreeTcpPort();
         server.Prefixes.Add($"http://127.0.0.1:{port}/");
         server.Start();
-        var serve = Task.Run(async () =>
-        {
-            var context = await server.GetContextAsync();
-            context.Response.StatusCode = 204;
-            context.Response.Close();
-        });
-        using var client = new HttpClient();
+        var serve = AnswerOneRequestWithNoContentAsync(server);
 
-        using var response = await client.GetAsync($"http://127.0.0.1:{port}/");
+        using var response = await Client.GetAsync($"http://127.0.0.1:{port}/");
         await serve;
 
         response.StatusCode.ShouldBe(System.Net.HttpStatusCode.NoContent);
         counters.Snapshot().Http.PerMinute.ShouldBeGreaterThanOrEqualTo(1);
+    }
+
+    private static async Task AnswerOneRequestWithNoContentAsync(System.Net.HttpListener server)
+    {
+        var context = await server.GetContextAsync();
+        context.Response.StatusCode = 204;
+        context.Response.Close();
     }
 
     private static int FreeTcpPort()

@@ -20,9 +20,7 @@ public class LiveTelemetryMiddlewareTests
             context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             return Task.CompletedTask;
         }, counters, clock);
-        var httpContext = new DefaultHttpContext();
-        httpContext.Request.Path = "/";
-        httpContext.Request.Headers["X-Azure-FDID"] = "fd-id";
+        var httpContext = new DefaultHttpContext { Request = { Path = "/", Headers = { ["X-Azure-FDID"] = "fd-id" } } };
 
         await middleware.InvokeAsync(httpContext);
 
@@ -36,8 +34,7 @@ public class LiveTelemetryMiddlewareTests
         var counters = new LiveTelemetryCounters(clock);
         var middleware = new LiveTelemetryMiddleware(
             _ => throw new InvalidOperationException("boom"), counters, clock);
-        var httpContext = new DefaultHttpContext();
-        httpContext.Request.Path = "/api/work-orders/status-counts";
+        var httpContext = new DefaultHttpContext { Request = { Path = "/api/work-orders/status-counts" } };
 
         await Should.ThrowAsync<InvalidOperationException>(() => middleware.InvokeAsync(httpContext));
 
@@ -50,8 +47,7 @@ public class LiveTelemetryMiddlewareTests
         var clock = new StubTimeProvider(Start);
         var counters = new LiveTelemetryCounters(clock);
         var middleware = new LiveTelemetryMiddleware(_ => Task.CompletedTask, counters, clock);
-        var httpContext = new DefaultHttpContext();
-        httpContext.Request.Path = "/_telemetry";
+        var httpContext = new DefaultHttpContext { Request = { Path = "/_telemetry" } };
 
         await middleware.InvokeAsync(httpContext);
 

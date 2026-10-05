@@ -5,11 +5,11 @@ namespace ClearMeasure.Bootcamp.UI.Server.LiveTelemetry;
 /// </summary>
 public static class RequestClassifier
 {
-    /// <summary>Header Azure Front Door adds to its health probes to an origin.</summary>
-    public const string FrontDoorHealthProbeHeader = "X-FD-HealthProbe";
+    // Header Azure Front Door adds to its health probes to an origin.
+    private const string FrontDoorHealthProbeHeader = "X-FD-HealthProbe";
 
-    /// <summary>Header Azure Front Door adds to every request it forwards (the profile's Front Door ID).</summary>
-    public const string FrontDoorIdHeader = "X-Azure-FDID";
+    // Header Azure Front Door adds to every request it forwards (the profile's Front Door ID).
+    private const string FrontDoorIdHeader = "X-Azure-FDID";
 
     private static readonly PathString HealthPath = new("/health");
     private static readonly PathString AlivePath = new("/alive");
@@ -36,11 +36,8 @@ public static class RequestClassifier
         return request.Headers.ContainsKey(FrontDoorIdHeader) ? RequestKind.FrontDoorTraffic : RequestKind.DirectTraffic;
     }
 
-    /// <summary>
-    /// Returns whether <paramref name="path"/> is a diagnostic path: <c>/_*</c> (except Blazor's static assets),
-    /// <c>/health</c> or <c>/alive</c>.
-    /// </summary>
-    internal static bool IsProbePath(PathString path)
+    // A diagnostic path: /_* (except Blazor's static assets), /health or /alive.
+    private static bool IsProbePath(PathString path)
     {
         if (path.StartsWithSegments(HealthPath, StringComparison.OrdinalIgnoreCase)
             || path.StartsWithSegments(AlivePath, StringComparison.OrdinalIgnoreCase))

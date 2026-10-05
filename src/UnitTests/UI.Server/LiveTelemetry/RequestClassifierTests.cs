@@ -61,9 +61,7 @@ public class RequestClassifierTests
 
     private static HttpRequest CreateRequest(string path, params (string Name, string Value)[] headers)
     {
-        var context = new DefaultHttpContext();
-        context.Request.Method = HttpMethods.Get;
-        context.Request.Path = path;
+        var context = new DefaultHttpContext { Request = { Method = HttpMethods.Get, Path = path } };
         foreach (var (name, value) in headers)
         {
             context.Request.Headers[name] = value;

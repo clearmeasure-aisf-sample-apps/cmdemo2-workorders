@@ -10,8 +10,7 @@ namespace ClearMeasure.Bootcamp.UI.Server.LiveTelemetry;
 /// </summary>
 public static class LiveTelemetryExtensions
 {
-    /// <summary>Path of the live counters endpoint.</summary>
-    public const string EndpointPath = "/_telemetry";
+    private const string EndpointPath = "/_telemetry";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -35,7 +34,7 @@ public static class LiveTelemetryExtensions
             .AllowAnonymous()
             .CacheOutput(policy => policy.NoCache());
 
-    internal static IResult WriteSnapshot(HttpContext context, LiveTelemetryCounters counters)
+    private static IResult WriteSnapshot(HttpContext context, LiveTelemetryCounters counters)
     {
         context.Response.Headers[HeaderNames.AccessControlAllowOrigin] = "*";
         context.Response.Headers[HeaderNames.CacheControl] = "no-store";

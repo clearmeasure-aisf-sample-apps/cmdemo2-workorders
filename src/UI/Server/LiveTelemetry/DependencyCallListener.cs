@@ -20,7 +20,7 @@ public sealed class DependencyCallListener(LiveTelemetryCounters counters) :
     internal const string SqlCommandAfter = "Microsoft.Data.SqlClient.WriteCommandAfter";
     internal const string SqlCommandError = "Microsoft.Data.SqlClient.WriteCommandError";
 
-    internal const string HttpClientMeterName = "System.Net.Http";
+    private const string HttpClientMeterName = "System.Net.Http";
     internal const string HttpClientDurationInstrument = "http.client.request.duration";
 
     // Hosts the Azure Monitor exporter sends traces, metrics, logs, Live Metrics and statsbeat to.
@@ -175,7 +175,7 @@ public sealed class DependencyCallListener(LiveTelemetryCounters counters) :
         counters.RecordHttpClientCall();
     }
 
-    internal static bool IsTelemetryIngestionHost(string host)
+    private static bool IsTelemetryIngestionHost(string host)
     {
         foreach (var suffix in TelemetryIngestionHostSuffixes)
         {

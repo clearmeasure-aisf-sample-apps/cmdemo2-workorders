@@ -41,8 +41,13 @@ public class LiveTelemetryCountersTests
 
         var snapshot = counters.Snapshot();
 
-        snapshot.Requests.ShouldBe(new RequestCounts(5, 2, 3, 2, 10));
-        snapshot.Probes.ShouldBe(new ProbeCounts(1, 2));
+        snapshot.Requests.PerMinute.ShouldBe(5);
+        snapshot.Requests.FrontDoor.ShouldBe(2);
+        snapshot.Requests.Direct.ShouldBe(3);
+        snapshot.Requests.Errors.ShouldBe(2);
+        snapshot.Requests.P95Ms.ShouldBe(10);
+        snapshot.Probes.PerMinute.ShouldBe(1);
+        snapshot.Probes.FrontDoor.ShouldBe(2);
         snapshot.Sql.ShouldBe(new SqlCounts(1, 3));
         snapshot.Http.ShouldBe(new HttpClientCounts(1));
     }
