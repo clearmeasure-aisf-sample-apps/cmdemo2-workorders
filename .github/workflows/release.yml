@@ -35,7 +35,7 @@ jobs:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       found: ${{ steps.find.outputs.found }}
     steps:
@@ -52,7 +52,7 @@ jobs:
   release:
     needs: packages
     if: needs.packages.outputs.found == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: release
     steps:
       - uses: actions/checkout@v6.0.1
@@ -71,7 +71,7 @@ jobs:
           "version=$major.$minor.${{ github.event.workflow_run.run_number }}" >> $env:GITHUB_OUTPUT
 
       - name: Download the build's packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: churchbulletin-nuget-packages
           path: ./packages
@@ -99,6 +99,21 @@ jobs:
           Compress-Archive -Path (Get-ChildItem -LiteralPath ./built -Force).FullName -DestinationPath $target -CompressionLevel Optimal
           "App Service package: $([Math]::Round((Get-Item $target).Length / 1MB)) MB" >> $env:GITHUB_STEP_SUMMARY
 
+      # GET /_build of the app answers build-facts.json from the root of the package. The repository's own script
+      # writes it: the code from this checkout; tests, coverage, complexity, CRAP and Qodana from the artifacts of
+      # the Build run, each null when its artifact is not there. A repository without the script skips the step.
+      - name: Stamp the build facts into the App Service package
+        if: hashFiles('scripts/Write-BuildFacts.ps1') != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          ./scripts/Write-BuildFacts.ps1 -DownloadArtifacts
+          -Version '${{ steps.version.outputs.version }}'
+          -RunId '${{ github.event.workflow_run.id }}'
+          -BuiltAt '${{ github.event.workflow_run.updated_at }}'
+          -Package 'octopus-packages/${{ vars.SYSTEM_SLUG }}-${{ vars.DEPLOYABLE_NAME }}.${{ steps.version.outputs.version }}.zip'
+
       - name: Sign in to Octopus
         uses: OctopusDeploy/login@v2
         with:
@@ -106,7 +121,7 @@ jobs:
           service_account_id: ${{ vars.OCTOPUS_SERVICE_ACCOUNT_ID }}
 
       - name: Push the App Service package
-        uses: OctopusDeploy/push-package-action@v3
+        uses: OctopusDeploy/push-package-action@v4
         with:
           packages: octopus-packages/${{ vars.SYSTEM_SLUG }}-${{ vars.DEPLOYABLE_NAME }}.${{ steps.version.outputs.version }}.zip
           overwrite_mode: IgnoreIfExists
@@ -137,7 +152,7 @@ jobs:
 
       - name: Push the database and acceptance-test packages
         if: vars.OWNS_DATABASE == 'true'
-        uses: OctopusDeploy/push-package-action@v3
+        uses: OctopusDeploy/push-package-action@v4
         with:
           packages: |
             packages/ChurchBulletin.Database.${{ steps.version.outputs.version }}.nupkg
@@ -145,7 +160,7 @@ jobs:
           overwrite_mode: IgnoreIfExists
 
       - name: Create the release
-        uses: OctopusDeploy/create-release-action@v3
+        uses: OctopusDeploy/create-release-action@v4
         with:
           project: ${{ vars.SYSTEM_SLUG }}-${{ vars.DEPLOYABLE_NAME }}
           release_number: ${{ steps.version.outputs.version }}
