@@ -20,6 +20,12 @@ public class EnvironmentStatusController : ControllerBase
     public const string RedactedValue = EchoController.RedactedValue;
     public const string RedactionProbeVariableName = "TEST_ENV_STATUS_SECRET";
 
+    /// <summary>What a property answers when the process cannot tell its value.</summary>
+    public const string UnknownValue = "unknown";
+
+    private const int Sha1HexLength = 40;
+    private const int Sha256HexLength = 64;
+
     private static readonly string[] ReportedEnvironmentVariableNames =
     [
         "ASPNETCORE_ENVIRONMENT",
@@ -61,14 +67,10 @@ public class EnvironmentStatusController : ControllerBase
 
         var version = Assembly.GetEntryAssembly()
             ?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-            ?.InformationalVersion ?? "unknown";
-        var gitSha = Assembly.GetEntryAssembly()
-            ?.GetCustomAttributes<AssemblyMetadataAttribute>()
-            .FirstOrDefault(a => a.Key == "SourceRevisionId")
-            ?.Value ?? "unknown";
+            ?.InformationalVersion ?? UnknownValue;
         var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
             ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
-            ?? "unknown";
+            ?? UnknownValue;
 
         return new EnvironmentStatusResponse(
             OsDescription: RuntimeInformation.OSDescription,
@@ -77,9 +79,24 @@ public class EnvironmentStatusController : ControllerBase
             EnvironmentVariableNames: names,
             EnvironmentVariables: variables,
             Version: version,
-            GitSha: gitSha,
+            GitSha: GitShaOf(version),
             EnvironmentName: environmentName);
     }
+
+    /// <summary>
+    /// The commit of the build. The .NET SDK appends it to the informational version ("2.4.18+7053d58a…") and
+    /// records it nowhere else in the assembly. <see cref="UnknownValue"/> when the version has no such suffix or
+    /// one that is not a full commit hash: build metadata of another kind is never answered as a commit.
+    /// </summary>
+    internal static string GitShaOf(string informationalVersion)
+    {
+        var separator = informationalVersion.IndexOf('+');
+        var revision = informationalVersion[(separator + 1)..];
+        return separator >= 0 && IsCommitHash(revision) ? revision : UnknownValue;
+    }
+
+    private static bool IsCommitHash(string text) =>
+        text.Length is Sha1HexLength or Sha256HexLength && text.All(char.IsAsciiHexDigit);
 }
 
 /// <summary>

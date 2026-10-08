@@ -14,6 +14,14 @@ public partial class MainLayout : IAsyncDisposable
     /// </summary>
     public const string NavRailBreakpointMediaQuery = "(max-width: 768px)";
 
+    private const string EnvironmentStatusPath = "/api/status/environment";
+    private const string BuildFactsPath = "/_build";
+
+    // What the environment status answers for a value the server cannot tell.
+    private const string UnknownValue = "unknown";
+
+    private const int ShortGitShaLength = 7;
+
     public enum Elements
     {
         NavRailToggle,
@@ -31,10 +39,12 @@ public partial class MainLayout : IAsyncDisposable
     protected int CopyrightYear => DateTime.UtcNow.Year;
 
     /// <summary>
-    /// Informational version of the running entry assembly, e.g. "1.2.3+abc1234".
+    /// Version of the running entry assembly, e.g. "1.2.3". The commit the SDK appends to it ("1.2.3+abc1234…")
+    /// stays only while the footer does not show that commit as a field of its own.
     /// </summary>
-    protected string AppVersion =>
-        Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? string.Empty;
+    protected string AppVersion => DisplayVersion(
+        Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? string.Empty,
+        _gitSha);
 
     [Inject]
     private IJSRuntime Js { get; set; } = null!;
@@ -52,8 +62,9 @@ public partial class MainLayout : IAsyncDisposable
     private bool _isNarrowViewport;
     private bool _viewportSynced;
     private bool _navVisible = true;
-    private string _gitSha = "unknown";
-    private string _environmentName = "unknown";
+    private string? _gitSha;
+    private string? _commitUrl;
+    private string? _environmentName;
 
     private string AppContainerClass => NavRailCss.AppContainerClass(_isNarrowViewport, _navVisible);
 
@@ -81,42 +92,74 @@ public partial class MainLayout : IAsyncDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Reads what the footer shows beside the version: the commit and the environment name the server tells, and
+    /// the page of that commit from the build facts. A value nothing tells stays null and the footer leaves it out.
+    /// </summary>
     protected override async Task OnInitializedAsync()
+    {
+        var status = await GetJsonAsync(EnvironmentStatusPath);
+        _gitSha = KnownValue(status, "gitSha");
+        _environmentName = KnownValue(status, "environmentName");
+        if (_gitSha is null)
+        {
+            return;
+        }
+
+        var buildFacts = await GetJsonAsync(BuildFactsPath);
+        _commitUrl = CommitUrl(KnownValue(buildFacts, "commitUrl"), _gitSha);
+    }
+
+    // An undefined element when the server does not answer JSON at the path.
+    private async Task<JsonElement> GetJsonAsync(string path)
     {
         try
         {
-            var response = await Http.GetAsync("/api/status/environment");
-            if (response.IsSuccessStatusCode)
+            using var response = await Http.GetAsync(path);
+            if (!response.IsSuccessStatusCode)
             {
-                (_gitSha, _environmentName) = await ParseEnvironmentStatusAsync(response);
+                return default;
             }
+
+            await using var stream = await response.Content.ReadAsStreamAsync();
+            using var document = await JsonDocument.ParseAsync(stream);
+            return document.RootElement.Clone();
         }
-        catch (HttpRequestException)
+        catch (Exception exception) when (exception is HttpRequestException or JsonException)
         {
-            // graceful fallback — fields remain "unknown"
-        }
-        catch (JsonException)
-        {
-            // graceful fallback — malformed response, fields remain "unknown"
+            return default;
         }
     }
 
-    /// <summary>
-    /// Extracted from <see cref="OnInitializedAsync"/> to keep that method's cyclomatic
-    /// complexity (and therefore its CRAP score) low; the property-presence branching lives
-    /// here instead, fully exercised by <c>MainLayoutTests</c>.
-    /// </summary>
-    private static async Task<(string GitSha, string EnvironmentName)> ParseEnvironmentStatusAsync(
-        HttpResponseMessage response)
+    private static string? KnownValue(JsonElement json, string propertyName)
     {
-        await using var stream = await response.Content.ReadAsStreamAsync();
-        using var doc = await JsonDocument.ParseAsync(stream);
-        var gitSha = doc.RootElement.TryGetProperty("gitSha", out var sha) ? sha.GetString() ?? "unknown" : "unknown";
-        var environmentName = doc.RootElement.TryGetProperty("environmentName", out var env)
-            ? env.GetString() ?? "unknown"
-            : "unknown";
-        return (gitSha, environmentName);
+        var text = TextOf(json, propertyName);
+        return string.IsNullOrWhiteSpace(text) || text == UnknownValue ? null : text;
     }
+
+    private static string? TextOf(JsonElement json, string propertyName) =>
+        json.ValueKind == JsonValueKind.Object
+        && json.TryGetProperty(propertyName, out var property)
+        && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
+
+    // Only the https page of this very commit is a link: build facts of another build do not describe it.
+    private static string? CommitUrl(string? commitUrl, string gitSha) =>
+        commitUrl is not null
+        && commitUrl.StartsWith("https://", StringComparison.Ordinal)
+        && commitUrl.EndsWith($"/{gitSha}", StringComparison.Ordinal)
+            ? commitUrl
+            : null;
+
+    // "2.4.18+7053d58a…" -> "2.4.18" when the footer shows 7053d58a… beside it; otherwise the version as it is.
+    internal static string DisplayVersion(string informationalVersion, string? gitSha) =>
+        gitSha is not null && informationalVersion.EndsWith($"+{gitSha}", StringComparison.Ordinal)
+            ? informationalVersion[..^(gitSha.Length + 1)]
+            : informationalVersion;
+
+    private static string Abbreviate(string gitSha) =>
+        gitSha.Length > ShortGitShaLength ? gitSha[..ShortGitShaLength] : gitSha;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

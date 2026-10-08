@@ -105,21 +105,26 @@
                 </span>
                 <span class="site-footer-note" data-testid="@nameof(Elements.SoftwareVersion)">
                     @AppVersion
-                    @if (_gitSha != "unknown" && _gitSha.Length >= 7)
+                    @if (_gitSha is not null)
                     {
                         <span> · </span>
-                        <a data-testid="@nameof(Elements.GitSha)"
-                           href="https://github.com/ClearMeasureLabs/bootcamp-palermo-workorders/commit/@_gitSha"
-                           target="_blank"
-                           rel="noopener noreferrer">@_gitSha[..7]</a>
+                        @if (_commitUrl is not null)
+                        {
+                            <a data-testid="@nameof(Elements.GitSha)"
+                               href="@_commitUrl"
+                               target="_blank"
+                               rel="noopener noreferrer">@Abbreviate(_gitSha)</a>
+                        }
+                        else
+                        {
+                            <span data-testid="@nameof(Elements.GitSha)">@Abbreviate(_gitSha)</span>
+                        }
                     }
-                    else
+                    @if (_environmentName is not null)
                     {
                         <span> · </span>
-                        <span data-testid="@nameof(Elements.GitSha)">unknown</span>
+                        <span data-testid="@nameof(Elements.EnvironmentName)">@_environmentName</span>
                     }
-                    <span> · </span>
-                    <span data-testid="@nameof(Elements.EnvironmentName)">@_environmentName</span>
                 </span>
             </div>
         </footer>

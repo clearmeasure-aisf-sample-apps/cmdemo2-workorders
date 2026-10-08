@@ -1,4 +1,5 @@
 using System.Globalization;
+using ClearMeasure.Bootcamp.UI.Api.Controllers;
 using ClearMeasure.Bootcamp.UI.Shared;
 
 namespace ClearMeasure.Bootcamp.AcceptanceTests.App;
@@ -75,36 +76,56 @@ public class CopyrightFooterTests : AcceptanceTestBase
         await Expect(versionSpan).ToBeVisibleAsync();
         var text = await versionSpan.InnerTextAsync();
         text.Trim().ShouldNotBeEmpty();
+        text.ShouldNotContain(EnvironmentStatusController.UnknownValue);
     }
 
     [Test, Retry(2)]
     public async Task ShouldShowGitSha_InFooter_OnLandingPage()
     {
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await Page.GetByTestId(nameof(MainLayout.Elements.SoftwareVersion)).WaitForAsync();
 
+        var commit = await ServerStatusValue("gitSha");
         var gitSha = Page.GetByTestId(nameof(MainLayout.Elements.GitSha));
-        await gitSha.WaitForAsync();
-        await Expect(gitSha).ToBeVisibleAsync();
-
-        // When the build has a git SHA, the element is an anchor with an href to the commit.
-        // In local dev without SourceRevisionId the element falls back to a span showing "unknown".
-        var href = await gitSha.GetAttributeAsync("href");
-        if (href is not null)
+        if (commit is null)
         {
-            href.ShouldContain("github.com/ClearMeasureLabs/bootcamp-palermo-workorders/commit/");
+            await Expect(gitSha).ToHaveCountAsync(0);
+            return;
         }
+
+        await Expect(gitSha).ToHaveTextAsync(commit[..7]);
+
+        // A released build links the commit to its page, which its build facts name; a local build has none.
+        var href = await gitSha.GetAttributeAsync("href");
+        href?.ShouldEndWith($"/commit/{commit}");
     }
 
     [Test, Retry(2)]
     public async Task ShouldShowEnvironmentName_InFooter_OnLandingPage()
     {
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await Page.GetByTestId(nameof(MainLayout.Elements.SoftwareVersion)).WaitForAsync();
 
+        var environmentName = await ServerStatusValue("environmentName");
         var envName = Page.GetByTestId(nameof(MainLayout.Elements.EnvironmentName));
-        await envName.WaitForAsync();
-        await Expect(envName).ToBeVisibleAsync();
+        if (environmentName is null)
+        {
+            await Expect(envName).ToHaveCountAsync(0);
+            return;
+        }
 
-        var text = await envName.InnerTextAsync();
-        text.Trim().ShouldNotBeEmpty();
+        await Expect(envName).ToHaveTextAsync(environmentName);
+    }
+
+    /// <summary>
+    /// What the server under test tells of itself at <c>/api/status/environment</c>, or null when it cannot tell:
+    /// the footer shows the first and leaves out the second, in a local build and in a deployed environment alike.
+    /// </summary>
+    private async Task<string?> ServerStatusValue(string propertyName)
+    {
+        var response = await Page.APIRequest.GetAsync("/api/status/environment");
+        var status = await response.JsonAsync();
+        var value = status?.GetProperty(propertyName).GetString();
+        return value == EnvironmentStatusController.UnknownValue ? null : value;
     }
 }

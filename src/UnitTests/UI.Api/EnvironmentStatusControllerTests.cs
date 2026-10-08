@@ -12,6 +12,8 @@ namespace ClearMeasure.Bootcamp.UnitTests.UI.Api;
 public class EnvironmentStatusControllerTests
 {
     private const string SecretValue = "unit-test-env-status-secret-value";
+    private const string Sha1Commit = "7053d58a94b4a107a79fd7d6598808d3d8fe4643";
+    private const string Sha256Commit = Sha1Commit + "0123456789abcdef01234567";
 
     [Test]
     public void Get_Should_ReturnJson_WithOsDescriptionProcessorCountClrVersionAndEnvVarNames()
@@ -80,12 +82,36 @@ public class EnvironmentStatusControllerTests
     }
 
     [Test]
-    public void Get_Should_ReturnGitSha_WhenAssemblyMetadataAttributePresent()
+    public void Get_Should_ReturnGitSha_OfVersion()
     {
         var result = CreateController().Get();
 
         var payload = AssertOkPayload(result);
-        payload.GitSha.ShouldNotBeEmpty();
+        payload.GitSha.ShouldBe(EnvironmentStatusController.GitShaOf(payload.Version));
+    }
+
+    [TestCase("2.4.18+" + Sha1Commit, Sha1Commit)]
+    [TestCase("3.0.0-rc.1+" + Sha1Commit, Sha1Commit)]
+    [TestCase("2.4.18+" + Sha256Commit, Sha256Commit)]
+    public void GitShaOf_Should_ReturnCommit_When_VersionEndsWithFullCommitHash(
+        string informationalVersion,
+        string expected)
+    {
+        EnvironmentStatusController.GitShaOf(informationalVersion).ShouldBe(expected);
+    }
+
+    [TestCase("2.4.18")]
+    [TestCase("2.4.18+")]
+    [TestCase("2.4.18+local")]
+    [TestCase("2.4.18+20261008")]
+    [TestCase("2.4.18+7053d58")]
+    [TestCase("2.4.18+g053d58a94b4a107a79fd7d6598808d3d8fe4643")]
+    [TestCase(Sha1Commit)]
+    [TestCase(EnvironmentStatusController.UnknownValue)]
+    public void GitShaOf_Should_ReturnUnknown_When_VersionHasNoFullCommitHash(string informationalVersion)
+    {
+        EnvironmentStatusController.GitShaOf(informationalVersion)
+            .ShouldBe(EnvironmentStatusController.UnknownValue);
     }
 
     private static EnvironmentStatusController CreateController() =>
