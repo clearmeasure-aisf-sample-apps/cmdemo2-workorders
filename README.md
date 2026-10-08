@@ -1,6 +1,6 @@
 # Work Order Management System
 
-A work order management application built with .NET 10.0 implementing Onion Architecture. The system uses Blazor WebAssembly for the UI, Entity Framework Core for data access, MediatR for CQRS, and deploys to Azure Container Apps.
+A work order management application built with .NET 10.0 implementing Onion Architecture. The system uses Blazor WebAssembly for the UI, Entity Framework Core for data access, MediatR for CQRS, and deploys to Azure App Service: in this system (cmdemo2) it runs as a web app in two regions behind Azure Front Door, as the system repository [cmdemo2-system](https://github.com/clearmeasure-aisf-sample-apps/cmdemo2-system) declares (`system.json`, hosting `appservice`).
 
 This codebase serves as both a working application and a teaching reference for software architecture. The 51 architectural patterns cataloged below are all demonstrated in the source code.
 
