@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using Bunit;
 using ClearMeasure.Bootcamp.Core;
@@ -21,6 +22,15 @@ namespace ClearMeasure.Bootcamp.UnitTests.UI.Shared;
 [TestFixture]
 public class MainLayoutTests
 {
+    private const string Commit = "abc1234def5678901abc1234def5678901abc123";
+    private const string ShortCommit = "abc1234";
+    private const string CommitUrl = "https://github.com/example-org/workorders/commit/" + Commit;
+    private const string BuildFactsOfCommit = "{\"commit\":\"" + Commit + "\",\"commitUrl\":\"" + CommitUrl + "\"}";
+    private const string FieldSeparator = "·";
+    private const string SoftwareVersionSelector = $"[data-testid='{nameof(MainLayout.Elements.SoftwareVersion)}']";
+    private const string GitShaSelector = $"[data-testid='{nameof(MainLayout.Elements.GitSha)}']";
+    private const string EnvironmentNameSelector = $"[data-testid='{nameof(MainLayout.Elements.EnvironmentName)}']";
+
     [Test]
     public async Task ShouldRenderNavRailToggleWithExpandedStateByDefault()
     {
@@ -500,30 +510,55 @@ public class MainLayoutTests
 
 
     [Test]
-    public async Task ShouldRenderGitSha_WithCorrectHref_WhenEndpointReturnsValidSha()
+    public async Task ShouldLinkGitSha_ToCommitUrlOfBuildFacts_WhenBuildFactsNameThatCommit()
     {
-        await using var ctx = CreateContext(gitSha: "abc1234def5678901");
+        await using var ctx = CreateContext(gitSha: Commit, buildFactsJson: BuildFactsOfCommit);
 
-        var component = ctx.Render<CascadingAuthenticationState>(p => p.AddChildContent<MainLayout>());
-        var layout = component.FindComponent<MainLayout>();
+        var layout = RenderLayout(ctx);
 
-        var anchor = layout.Find($"[data-testid='{nameof(MainLayout.Elements.GitSha)}']");
+        var anchor = layout.Find(GitShaSelector);
         anchor.TagName.ShouldBe("A");
-        var href = anchor.GetAttribute("href");
-        href.ShouldNotBeNull();
-        href.ShouldContain("github.com/ClearMeasureLabs/bootcamp-palermo-workorders/commit/abc1234def5678901");
+        anchor.GetAttribute("href").ShouldBe(CommitUrl);
+        anchor.GetAttribute("target").ShouldBe("_blank");
+        anchor.GetAttribute("rel").ShouldBe("noopener noreferrer");
     }
 
     [Test]
     public async Task ShouldTruncateGitSha_ToSevenChars_ForDisplayText()
     {
-        await using var ctx = CreateContext(gitSha: "abc1234def5678901");
+        await using var ctx = CreateContext(gitSha: Commit, buildFactsJson: BuildFactsOfCommit);
 
-        var component = ctx.Render<CascadingAuthenticationState>(p => p.AddChildContent<MainLayout>());
-        var layout = component.FindComponent<MainLayout>();
+        var layout = RenderLayout(ctx);
 
-        var anchor = layout.Find($"[data-testid='{nameof(MainLayout.Elements.GitSha)}']");
-        anchor.TextContent.Trim().ShouldBe("abc1234");
+        layout.Find(GitShaSelector).TextContent.Trim().ShouldBe(ShortCommit);
+    }
+
+    [Test]
+    public async Task ShouldRenderGitSha_AsReturned_WhenShorterThanSevenChars()
+    {
+        await using var ctx = CreateContext(gitSha: "abc12");
+
+        var layout = RenderLayout(ctx);
+
+        layout.Find(GitShaSelector).TextContent.Trim().ShouldBe("abc12");
+    }
+
+    [TestCase(null)]
+    [TestCase("{\"commit\":null,\"commitUrl\":null}")]
+    [TestCase("{\"commitUrl\":\"https://github.com/example-org/workorders/commit/0000000000000000000000000000000000000000\"}")]
+    [TestCase("{\"commitUrl\":\"http://github.com/example-org/workorders/commit/" + Commit + "\"}")]
+    [TestCase("{not valid json")]
+    [TestCase("[]")]
+    public async Task ShouldRenderGitSha_WithoutLink_WhenBuildFactsDoNotLinkThatCommit(string? buildFactsJson)
+    {
+        await using var ctx = CreateContext(gitSha: Commit, buildFactsJson: buildFactsJson);
+
+        var layout = RenderLayout(ctx);
+
+        var element = layout.Find(GitShaSelector);
+        element.TagName.ShouldBe("SPAN");
+        element.TextContent.Trim().ShouldBe(ShortCommit);
+        layout.FindAll($"{SoftwareVersionSelector} a").Count.ShouldBe(0);
     }
 
     [Test]
@@ -531,71 +566,100 @@ public class MainLayoutTests
     {
         await using var ctx = CreateContext(environmentName: "Staging");
 
-        var component = ctx.Render<CascadingAuthenticationState>(p => p.AddChildContent<MainLayout>());
-        var layout = component.FindComponent<MainLayout>();
+        var layout = RenderLayout(ctx);
 
-        var span = layout.Find($"[data-testid='{nameof(MainLayout.Elements.EnvironmentName)}']");
-        span.TextContent.Trim().ShouldBe("Staging");
+        layout.Find(EnvironmentNameSelector).TextContent.Trim().ShouldBe("Staging");
+        layout.FindAll(GitShaSelector).Count.ShouldBe(0);
     }
 
     [Test]
-    public async Task ShouldRenderUnknown_ForGitSha_WhenEndpointThrows()
+    public async Task ShouldRenderGitShaThenEnvironmentName_AfterVersion_WhenEndpointReturnsBoth()
+    {
+        await using var ctx = CreateContext(gitSha: Commit, environmentName: "Staging");
+
+        var layout = RenderLayout(ctx);
+
+        var parts = FooterVersionParts(layout);
+        parts.Length.ShouldBe(3);
+        parts[0].ShouldNotBeEmpty();
+        parts[1].ShouldBe(ShortCommit);
+        parts[2].ShouldBe("Staging");
+    }
+
+    [Test]
+    public async Task ShouldLeaveOutGitShaAndEnvironmentName_WhenEndpointReturnsUnknown()
+    {
+        await using var ctx = CreateContext();
+
+        var layout = RenderLayout(ctx);
+
+        AssertFooterShowsVersionOnly(layout);
+    }
+
+    [Test]
+    public async Task ShouldLeaveOutGitShaAndEnvironmentName_WhenEndpointFails()
     {
         await using var ctx = CreateContext(simulateHttpError: true);
 
-        var component = ctx.Render<CascadingAuthenticationState>(p => p.AddChildContent<MainLayout>());
-        var layout = component.FindComponent<MainLayout>();
+        var layout = RenderLayout(ctx);
 
-        var element = layout.Find($"[data-testid='{nameof(MainLayout.Elements.GitSha)}']");
-        element.TextContent.Trim().ShouldBe("unknown");
+        AssertFooterShowsVersionOnly(layout);
     }
 
     [Test]
-    public async Task ShouldRenderUnknown_ForEnvironmentName_WhenEndpointThrows()
+    public async Task ShouldLeaveOutGitShaAndEnvironmentName_WhenServerIsNotReachable()
     {
-        await using var ctx = CreateContext(simulateHttpError: true);
+        await using var ctx = CreateContext(simulateConnectionFailure: true);
 
-        var component = ctx.Render<CascadingAuthenticationState>(p => p.AddChildContent<MainLayout>());
-        var layout = component.FindComponent<MainLayout>();
+        var layout = RenderLayout(ctx);
 
-        var span = layout.Find($"[data-testid='{nameof(MainLayout.Elements.EnvironmentName)}']");
-        span.TextContent.Trim().ShouldBe("unknown");
+        AssertFooterShowsVersionOnly(layout);
     }
 
-    [Test]
-    public async Task ShouldRenderUnknown_ForGitSha_WhenResponseOmitsGitShaProperty()
+    [TestCase("{\"version\":\"1.0.0\"}")]
+    [TestCase("{\"gitSha\":null,\"environmentName\":null}")]
+    [TestCase("{\"gitSha\":\"\",\"environmentName\":\" \"}")]
+    [TestCase("{\"gitSha\":7053,\"environmentName\":true}")]
+    [TestCase("{not valid json")]
+    [TestCase("[]")]
+    public async Task ShouldLeaveOutGitShaAndEnvironmentName_WhenResponseDoesNotNameThem(string rawJsonBody)
     {
-        await using var ctx = CreateContext(rawJsonBody: "{\"version\":\"1.0.0\"}");
+        await using var ctx = CreateContext(rawJsonBody: rawJsonBody);
 
-        var component = ctx.Render<CascadingAuthenticationState>(p => p.AddChildContent<MainLayout>());
-        var layout = component.FindComponent<MainLayout>();
+        var layout = RenderLayout(ctx);
 
-        var element = layout.Find($"[data-testid='{nameof(MainLayout.Elements.GitSha)}']");
-        element.TextContent.Trim().ShouldBe("unknown");
+        AssertFooterShowsVersionOnly(layout);
     }
 
-    [Test]
-    public async Task ShouldRenderUnknown_ForEnvironmentName_WhenResponseOmitsEnvironmentNameProperty()
+    [TestCase("2.4.18+" + Commit, Commit, "2.4.18")]
+    [TestCase("2.4.18+" + Commit, null, "2.4.18+" + Commit)]
+    [TestCase("2.4.18+" + Commit, ShortCommit, "2.4.18+" + Commit)]
+    [TestCase("2.4.18", Commit, "2.4.18")]
+    [TestCase("", Commit, "")]
+    public void DisplayVersion_ShouldDropCommit_OnlyWhenFooterShowsThatCommit(
+        string informationalVersion,
+        string? gitSha,
+        string expected)
     {
-        await using var ctx = CreateContext(rawJsonBody: "{\"version\":\"1.0.0\"}");
-
-        var component = ctx.Render<CascadingAuthenticationState>(p => p.AddChildContent<MainLayout>());
-        var layout = component.FindComponent<MainLayout>();
-
-        var span = layout.Find($"[data-testid='{nameof(MainLayout.Elements.EnvironmentName)}']");
-        span.TextContent.Trim().ShouldBe("unknown");
+        MainLayout.DisplayVersion(informationalVersion, gitSha).ShouldBe(expected);
     }
 
-    [Test]
-    public async Task ShouldRenderUnknown_ForGitSha_WhenResponseBodyIsMalformedJson()
+    private static IRenderedComponent<MainLayout> RenderLayout(BunitContext ctx) =>
+        ctx.Render<CascadingAuthenticationState>(p => p.AddChildContent<MainLayout>()).FindComponent<MainLayout>();
+
+    private static string[] FooterVersionParts(IRenderedComponent<MainLayout> layout) =>
+        layout.Find(SoftwareVersionSelector).TextContent
+            .Split(FieldSeparator, StringSplitOptions.TrimEntries);
+
+    private static void AssertFooterShowsVersionOnly(IRenderedComponent<MainLayout> layout)
     {
-        await using var ctx = CreateContext(rawJsonBody: "{not valid json");
+        layout.FindAll(GitShaSelector).Count.ShouldBe(0);
+        layout.FindAll(EnvironmentNameSelector).Count.ShouldBe(0);
 
-        var component = ctx.Render<CascadingAuthenticationState>(p => p.AddChildContent<MainLayout>());
-        var layout = component.FindComponent<MainLayout>();
-
-        var element = layout.Find($"[data-testid='{nameof(MainLayout.Elements.GitSha)}']");
-        element.TextContent.Trim().ShouldBe("unknown");
+        var parts = FooterVersionParts(layout);
+        parts.Length.ShouldBe(1);
+        parts[0].ShouldNotBeEmpty();
+        parts[0].ShouldNotContain("unknown");
     }
 
     private static BunitContext CreateContext(
@@ -603,7 +667,9 @@ public class MainLayoutTests
         string? gitSha = null,
         string? environmentName = null,
         bool simulateHttpError = false,
-        string? rawJsonBody = null)
+        string? rawJsonBody = null,
+        string? buildFactsJson = null,
+        bool simulateConnectionFailure = false)
     {
         var ctx = new BunitContext();
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
@@ -626,12 +692,17 @@ public class MainLayoutTests
 
         ctx.Services.AddSingleton(customAuth);
 
-        var handler = new StubEnvironmentStatusHandler(
-            simulateHttpError ? null : new EnvironmentStatusStub(
-                Version: "1.0.0",
-                GitSha: gitSha ?? "unknown",
-                EnvironmentName: environmentName ?? "unknown"),
-            rawJsonBody);
+        var environmentStatusJson = simulateHttpError
+            ? null
+            : rawJsonBody ?? JsonSerializer.Serialize(
+                new EnvironmentStatusStub(
+                    Version: "1.0.0",
+                    GitSha: gitSha ?? "unknown",
+                    EnvironmentName: environmentName ?? "unknown"),
+                JsonSerializerOptions.Web);
+        HttpMessageHandler handler = simulateConnectionFailure
+            ? new StubUnreachableServerHandler()
+            : new StubServerHandler(environmentStatusJson, buildFactsJson);
         ctx.Services.AddSingleton(new HttpClient(handler)
         {
             BaseAddress = new Uri("http://localhost/")
@@ -649,27 +720,36 @@ public class MainLayoutTests
     private sealed record EnvironmentStatusStub(string Version, string GitSha, string EnvironmentName);
     // ReSharper restore NotAccessedPositionalProperty.Local
 
-    private sealed class StubEnvironmentStatusHandler(EnvironmentStatusStub? stub, string? rawJsonBody = null) : HttpMessageHandler
+    /// <summary>
+    /// Answers the two documents the footer reads; a null document is a failed request, and any other path is one too.
+    /// </summary>
+    private sealed class StubServerHandler(string? environmentStatusJson, string? buildFactsJson) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            if (rawJsonBody is not null)
+            var json = request.RequestUri?.AbsolutePath switch
             {
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-                {
-                    Content = new StringContent(rawJsonBody, System.Text.Encoding.UTF8, "application/json")
-                });
+                "/api/status/environment" => environmentStatusJson,
+                "/_build" => buildFactsJson,
+                _ => null
+            };
+            if (json is null)
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
             }
 
-            if (stub is null)
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
-
-            var json = JsonSerializer.Serialize(stub, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+                Content = new StringContent(json, Encoding.UTF8, "application/json")
             });
         }
+    }
+
+    private sealed class StubUnreachableServerHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromException<HttpResponseMessage>(new HttpRequestException("Connection refused"));
     }
 }
