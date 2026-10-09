@@ -39,12 +39,11 @@ public partial class MainLayout : IAsyncDisposable
     protected int CopyrightYear => DateTime.UtcNow.Year;
 
     /// <summary>
-    /// Version of the running entry assembly, e.g. "1.2.3". The commit the SDK appends to it ("1.2.3+abc1234…")
-    /// stays only while the footer does not show that commit as a field of its own.
+    /// Version of the running entry assembly, e.g. "1.2.3", never with the commit the SDK appends to it
+    /// ("1.2.3+abc1234…"): the footer shows the commit as a field of its own once the server has told it.
     /// </summary>
-    protected string AppVersion => DisplayVersion(
-        Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? string.Empty,
-        _gitSha);
+    protected string AppVersion => AppVersionFormatter.DisplayVersion(
+        Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
 
     [Inject]
     private IJSRuntime Js { get; set; } = null!;
@@ -151,12 +150,6 @@ public partial class MainLayout : IAsyncDisposable
         && commitUrl.EndsWith($"/{gitSha}", StringComparison.Ordinal)
             ? commitUrl
             : null;
-
-    // "2.4.18+7053d58a…" -> "2.4.18" when the footer shows 7053d58a… beside it; otherwise the version as it is.
-    internal static string DisplayVersion(string informationalVersion, string? gitSha) =>
-        gitSha is not null && informationalVersion.EndsWith($"+{gitSha}", StringComparison.Ordinal)
-            ? informationalVersion[..^(gitSha.Length + 1)]
-            : informationalVersion;
 
     private static string Abbreviate(string gitSha) =>
         gitSha.Length > ShortGitShaLength ? gitSha[..ShortGitShaLength] : gitSha;

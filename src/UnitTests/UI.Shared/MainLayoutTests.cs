@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Net;
+using System.Reflection;
+using System.Reflection.Emit;
 using System.Text;
 using System.Text.Json;
 using Bunit;
@@ -26,10 +28,20 @@ public class MainLayoutTests
     private const string ShortCommit = "abc1234";
     private const string CommitUrl = "https://github.com/example-org/workorders/commit/" + Commit;
     private const string BuildFactsOfCommit = "{\"commit\":\"" + Commit + "\",\"commitUrl\":\"" + CommitUrl + "\"}";
+    private const string DisplayedVersion = "2.4.18";
+    private const string InformationalVersion = DisplayedVersion + "+" + Commit;
     private const string FieldSeparator = "·";
     private const string SoftwareVersionSelector = $"[data-testid='{nameof(MainLayout.Elements.SoftwareVersion)}']";
     private const string GitShaSelector = $"[data-testid='{nameof(MainLayout.Elements.GitSha)}']";
     private const string EnvironmentNameSelector = $"[data-testid='{nameof(MainLayout.Elements.EnvironmentName)}']";
+
+    private Assembly? _entryAssembly;
+
+    [SetUp]
+    public void RememberEntryAssembly() => _entryAssembly = Assembly.GetEntryAssembly();
+
+    [TearDown]
+    public void RestoreEntryAssembly() => Assembly.SetEntryAssembly(_entryAssembly);
 
     [Test]
     public async Task ShouldRenderNavRailToggleWithExpandedStateByDefault()
@@ -631,17 +643,41 @@ public class MainLayoutTests
         AssertFooterShowsVersionOnly(layout);
     }
 
-    [TestCase("2.4.18+" + Commit, Commit, "2.4.18")]
-    [TestCase("2.4.18+" + Commit, null, "2.4.18+" + Commit)]
-    [TestCase("2.4.18+" + Commit, ShortCommit, "2.4.18+" + Commit)]
-    [TestCase("2.4.18", Commit, "2.4.18")]
-    [TestCase("", Commit, "")]
-    public void DisplayVersion_ShouldDropCommit_OnlyWhenFooterShowsThatCommit(
-        string informationalVersion,
-        string? gitSha,
-        string expected)
+    [Test]
+    public async Task ShouldRenderVersionWithoutBuildMetadata_WhileEnvironmentStatusIsPending_ThenLinkGitSha()
     {
-        MainLayout.DisplayVersion(informationalVersion, gitSha).ShouldBe(expected);
+        StubEntryAssembly(InformationalVersion);
+        var environmentStatus = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var ctx = CreateContext(
+            gitSha: Commit, buildFactsJson: BuildFactsOfCommit, environmentStatusGate: environmentStatus.Task);
+
+        var layout = RenderLayout(ctx);
+
+        FooterVersionParts(layout).ShouldBe([DisplayedVersion]);
+        layout.FindAll(GitShaSelector).Count.ShouldBe(0);
+
+        environmentStatus.SetResult();
+
+        await layout.WaitForAssertionAsync(() =>
+        {
+            var anchor = layout.Find(GitShaSelector);
+            anchor.TagName.ShouldBe("A");
+            anchor.GetAttribute("href").ShouldBe(CommitUrl);
+        });
+        FooterVersionParts(layout).ShouldBe([DisplayedVersion, ShortCommit]);
+    }
+
+    [TestCase(HttpStatusCode.ServiceUnavailable)]
+    [TestCase(HttpStatusCode.TooManyRequests)]
+    public async Task ShouldRenderVersionWithoutBuildMetadata_WhenEnvironmentStatusFails(HttpStatusCode status)
+    {
+        StubEntryAssembly(InformationalVersion);
+        await using var ctx = CreateContext(simulateHttpError: true, httpErrorStatus: status);
+
+        var layout = RenderLayout(ctx);
+
+        FooterVersionParts(layout).ShouldBe([DisplayedVersion]);
+        layout.FindAll(GitShaSelector).Count.ShouldBe(0);
     }
 
     private static IRenderedComponent<MainLayout> RenderLayout(BunitContext ctx) =>
@@ -662,6 +698,19 @@ public class MainLayoutTests
         parts[0].ShouldNotContain("unknown");
     }
 
+    // The footer shows the version of the entry assembly, and the test host's has no build metadata to leave out.
+    // The runtime takes only a loaded assembly as the entry assembly: a type of the dynamic one gives it.
+    private static void StubEntryAssembly(string informationalVersion)
+    {
+        var attribute = new CustomAttributeBuilder(
+            typeof(AssemblyInformationalVersionAttribute).GetConstructor([typeof(string)])!,
+            [informationalVersion]);
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(
+            new AssemblyName(nameof(StubEntryAssembly)), AssemblyBuilderAccess.Run, [attribute]);
+        var type = assembly.DefineDynamicModule(nameof(StubEntryAssembly)).DefineType(nameof(StubEntryAssembly));
+        Assembly.SetEntryAssembly(type.CreateType().Assembly);
+    }
+
     private static BunitContext CreateContext(
         string? authenticateAsUser = null,
         string? gitSha = null,
@@ -669,7 +718,9 @@ public class MainLayoutTests
         bool simulateHttpError = false,
         string? rawJsonBody = null,
         string? buildFactsJson = null,
-        bool simulateConnectionFailure = false)
+        bool simulateConnectionFailure = false,
+        HttpStatusCode httpErrorStatus = HttpStatusCode.InternalServerError,
+        Task? environmentStatusGate = null)
     {
         var ctx = new BunitContext();
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
@@ -702,7 +753,7 @@ public class MainLayoutTests
                 JsonSerializerOptions.Web);
         HttpMessageHandler handler = simulateConnectionFailure
             ? new StubUnreachableServerHandler()
-            : new StubServerHandler(environmentStatusJson, buildFactsJson);
+            : new StubServerHandler(environmentStatusJson, buildFactsJson, httpErrorStatus, environmentStatusGate);
         ctx.Services.AddSingleton(new HttpClient(handler)
         {
             BaseAddress = new Uri("http://localhost/")
@@ -722,27 +773,40 @@ public class MainLayoutTests
 
     /// <summary>
     /// Answers the two documents the footer reads; a null document is a failed request, and any other path is one too.
+    /// The environment status is answered only once its gate completes, when it has one.
     /// </summary>
-    private sealed class StubServerHandler(string? environmentStatusJson, string? buildFactsJson) : HttpMessageHandler
+    private sealed class StubServerHandler(
+        string? environmentStatusJson,
+        string? buildFactsJson,
+        HttpStatusCode failureStatus,
+        Task? environmentStatusGate) : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(
+        private const string EnvironmentStatusPath = "/api/status/environment";
+
+        protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            var json = request.RequestUri?.AbsolutePath switch
+            var path = request.RequestUri?.AbsolutePath;
+            if (path == EnvironmentStatusPath && environmentStatusGate is not null)
             {
-                "/api/status/environment" => environmentStatusJson,
+                await environmentStatusGate;
+            }
+
+            var json = path switch
+            {
+                EnvironmentStatusPath => environmentStatusJson,
                 "/_build" => buildFactsJson,
                 _ => null
             };
             if (json is null)
             {
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+                return new HttpResponseMessage(failureStatus);
             }
 
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(json, Encoding.UTF8, "application/json")
-            });
+            };
         }
     }
 

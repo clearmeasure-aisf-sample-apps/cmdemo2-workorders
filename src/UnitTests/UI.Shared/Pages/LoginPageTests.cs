@@ -722,6 +722,27 @@ public class LoginPageTests
     }
 
     [Test]
+    public async Task Should_ShowVersionLabel_WithoutBuildMetadata()
+    {
+        await using var ctx = new BunitContext();
+
+        var provider = new CustomAuthenticationStateProvider(new StubUserSessionStore());
+        ctx.Services.AddSingleton(provider);
+        ctx.Services.AddSingleton<AuthenticationStateProvider>(provider);
+        ctx.Services.AddSingleton<IUiBus>(new StubUiBus());
+        ctx.Services.AddSingleton<IBus>(new StubBus());
+        ctx.Services.AddSingleton<IHostEnvironment>(new FakeHostEnvironment("Testing"));
+
+        var component = ctx.Render<Login>();
+
+        var versionLabel = component.FindAll("small.text-muted")
+            .First(s => s.TextContent.StartsWith("Version "));
+        var versionString = versionLabel.TextContent.Split(" · Environment ", 2)[0]["Version ".Length..];
+        versionString.ShouldNotBeNullOrWhiteSpace();
+        versionString.ShouldNotContain("+");
+    }
+
+    [Test]
     public async Task EnterThePortalButton_ShouldBeDisabled_OnInitialRender()
     {
         await using var ctx = new BunitContext();

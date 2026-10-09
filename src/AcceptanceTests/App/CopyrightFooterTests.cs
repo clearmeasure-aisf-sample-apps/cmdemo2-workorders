@@ -77,6 +77,7 @@ public class CopyrightFooterTests : AcceptanceTestBase
         var text = await versionSpan.InnerTextAsync();
         text.Trim().ShouldNotBeEmpty();
         text.ShouldNotContain(EnvironmentStatusController.UnknownValue);
+        text.ShouldNotContain("+");
     }
 
     [Test, Retry(2)]
@@ -94,10 +95,7 @@ public class CopyrightFooterTests : AcceptanceTestBase
         }
 
         await Expect(gitSha).ToHaveTextAsync(commit[..7]);
-
-        // A released build links the commit to its page, which its build facts name; a local build has none.
-        var href = await gitSha.GetAttributeAsync("href");
-        href?.ShouldEndWith($"/commit/{commit}");
+        await ExpectLinkToCommitPage(gitSha, commit);
     }
 
     [Test, Retry(2)]
@@ -117,6 +115,43 @@ public class CopyrightFooterTests : AcceptanceTestBase
         await Expect(envName).ToHaveTextAsync(environmentName);
     }
 
+    [Test, Retry(2)]
+    public async Task ShouldShowVersionWithoutCommit_WhileEnvironmentStatusIsPending_ThenGitShaWithItsLink()
+    {
+        var statusRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var statusReleased = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await Page.RouteAsync("**/api/status/environment", async route =>
+        {
+            statusRequested.TrySetResult();
+            await statusReleased.Task;
+            await route.ContinueAsync();
+        });
+
+        await Page.ReloadAsync();
+        await statusRequested.Task.WaitAsync(TimeSpan.FromSeconds(60));
+
+        var versionSpan = Page.GetByTestId(nameof(MainLayout.Elements.SoftwareVersion));
+        var gitSha = Page.GetByTestId(nameof(MainLayout.Elements.GitSha));
+        await Expect(versionSpan).ToBeVisibleAsync();
+        await Expect(gitSha).ToHaveCountAsync(0);
+        var pendingText = await versionSpan.InnerTextAsync();
+        pendingText.Trim().ShouldNotBeEmpty();
+        pendingText.ShouldNotContain("+");
+
+        statusReleased.SetResult();
+
+        var commit = await ServerStatusValue("gitSha");
+        if (commit is null)
+        {
+            await Expect(gitSha).ToHaveCountAsync(0);
+            return;
+        }
+
+        await Expect(gitSha).ToHaveTextAsync(commit[..7]);
+        await ExpectLinkToCommitPage(gitSha, commit);
+        (await versionSpan.InnerTextAsync()).ShouldNotContain("+");
+    }
+
     /// <summary>
     /// What the server under test tells of itself at <c>/api/status/environment</c>, or null when it cannot tell:
     /// the footer shows the first and leaves out the second, in a local build and in a deployed environment alike.
@@ -127,5 +162,23 @@ public class CopyrightFooterTests : AcceptanceTestBase
         var status = await response.JsonAsync();
         var value = status?.GetProperty(propertyName).GetString();
         return value == EnvironmentStatusController.UnknownValue ? null : value;
+    }
+
+    /// <summary>
+    /// A released build links the commit to its page, which its build facts name at <c>/_build</c>; a local build
+    /// names none, and its footer shows the commit without a link.
+    /// </summary>
+    private async Task ExpectLinkToCommitPage(ILocator gitSha, string commit)
+    {
+        var response = await Page.APIRequest.GetAsync("/_build");
+        var buildFacts = await response.JsonAsync();
+        var commitUrl = buildFacts?.GetProperty("commitUrl").GetString();
+        if (commitUrl is null || !commitUrl.EndsWith($"/commit/{commit}", StringComparison.Ordinal))
+        {
+            (await gitSha.GetAttributeAsync("href")).ShouldBeNull();
+            return;
+        }
+
+        await Expect(gitSha).ToHaveAttributeAsync("href", commitUrl);
     }
 }

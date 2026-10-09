@@ -31,10 +31,9 @@ public partial class Login : AppComponentBase
 
     protected override Task OnInitializedAsync()
     {
-        AppVersion = typeof(Login).Assembly
+        AppVersion = AppVersionFormatter.DisplayVersion(typeof(Login).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-            ?? typeof(Login).Assembly.GetName().Version?.ToString()
-            ?? string.Empty;
+            ?? typeof(Login).Assembly.GetName().Version?.ToString());
         AppEnvironment = string.IsNullOrWhiteSpace(HostEnvironment?.EnvironmentName)
             ? "unknown"
             : HostEnvironment.EnvironmentName;
