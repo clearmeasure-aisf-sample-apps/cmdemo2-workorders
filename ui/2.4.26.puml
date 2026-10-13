@@ -1,0 +1,44 @@
+@startuml
+!pragma layout smetana
+!include <C4/C4_Component>
+HIDE_STEREOTYPE()
+skinparam wrapWidth 900
+skinparam maxMessageSize 300
+skinparam nodesep 40
+skinparam ranksep 60
+UpdateElementStyle("component", $bgColor="#eceff1", $fontColor="#1c2b33", $borderColor="#455a64")
+UpdateElementStyle("system", $bgColor="#37474f", $fontColor="#ffffff", $borderColor="#263238")
+System(process, "dotnet ClearMeasure.Bootcamp.UI.Server.dll", "The process the container image starts")
+Boundary(app, "ui 2.4.26", "Assemblies of the application") {
+  Component(a_ClearMeasure_Bootcamp_UI_Server, "ClearMeasure.Bootcamp.UI.Server", $descr="Asp.Versioning.Http 8.1.0\nAsp.Versioning.Mvc 8.1.0\nFluentValidation.DependencyInjectionExtensions 11.11.0\nGoogle.Protobuf 3.27.0\nGrpc.AspNetCore 2.70.0\nLamar.Microsoft.DependencyInjection 15.0.1\nMicrosoft.AspNetCore.Components.WebAssembly.Server 10.0.0\nModelContextProtocol 1.0.0\nModelContextProtocol.AspNetCore 1.0.0\nNServiceBus.Extensions.Hosting 3.0.1\nOpenTelemetry.Instrumentation.AspNetCore 1.15.2\nOpenTelemetry.Instrumentation.Http 1.15.1\nOpenTelemetry.Instrumentation.Runtime 1.15.1\nOpenTelemetry.Instrumentation.SqlClient 1.15.2")
+  Component(a_ChurchBulletin_ServiceDefaults, "ChurchBulletin.ServiceDefaults", $descr="Azure.Monitor.OpenTelemetry.AspNetCore 1.6.0\nMicrosoft.Extensions.Http.Resilience 9.9.0\nMicrosoft.Extensions.ServiceDiscovery 9.5.0\nOpenTelemetry.Api 1.15.3\nOpenTelemetry.Exporter.Console 1.15.3\nOpenTelemetry.Exporter.OpenTelemetryProtocol 1.15.3\nOpenTelemetry.Extensions.Hosting 1.15.3\nOpenTelemetry.Instrumentation.AspNetCore 1.15.2\nOpenTelemetry.Instrumentation.EntityFrameworkCore 1.0.0-beta.12\nOpenTelemetry.Instrumentation.Http 1.15.1\nOpenTelemetry.Instrumentation.Runtime 1.15.1\nOpenTelemetry.Instrumentation.SqlClient 1.15.2\nSerilog.AspNetCore 9.0.0\nSerilog.Formatting.Compact 3.0.0")
+  Component(a_ClearMeasure_Bootcamp_Core, "ClearMeasure.Bootcamp.Core", $descr="FluentValidation 11.11.0\nMediatR.Contracts 2.0.1")
+  Component(a_ClearMeasure_Bootcamp_DataAccess, "ClearMeasure.Bootcamp.DataAccess", $descr="ClearMeasureLabs.HostedEndpoint.SqlServerTransport 1.0.30\nMediatR 12.4.1\nMicrosoft.EntityFrameworkCore 10.0.0\nMicrosoft.EntityFrameworkCore.Sqlite 10.0.0\nMicrosoft.EntityFrameworkCore.SqlServer 10.0.0\nNServiceBus.Persistence.Sql.TransactionalSession 8.3.0\nSQLitePCLRaw.bundle_e_sqlite3 2.1.12")
+  Component(a_ClearMeasure_Bootcamp_LlmGateway, "ClearMeasure.Bootcamp.LlmGateway", $descr="Azure.AI.OpenAI 2.1.0\nAzure.Core 1.60.0\nMediatR 12.4.1\nMicrosoft.Extensions.AI 9.7.0\nMicrosoft.Extensions.AI.Abstractions 10.3.0\nMicrosoft.Extensions.AI.OpenAI 9.7.1-preview.1.25365.4")
+  Component(a_ClearMeasure_Bootcamp_McpServer, "ClearMeasure.Bootcamp.McpServer", $descr="Lamar.Microsoft.DependencyInjection 15.0.1\nMediatR 12.4.1\nMicrosoft.EntityFrameworkCore.Sqlite 10.0.0\nMicrosoft.EntityFrameworkCore.SqlServer 10.0.0\nModelContextProtocol 1.0.0\nModelContextProtocol.AspNetCore 1.0.0\nOpenTelemetry.Instrumentation.AspNetCore 1.15.2\nOpenTelemetry.Instrumentation.Http 1.15.1\nOpenTelemetry.Instrumentation.Runtime 1.15.1\nOpenTelemetry.Instrumentation.SqlClient 1.15.2\nSQLitePCLRaw.bundle_e_sqlite3 2.1.12")
+  Component(a_ClearMeasure_Bootcamp_UI_Api, "ClearMeasure.Bootcamp.UI.Api", $descr="Asp.Versioning.Abstractions 8.1.0\nLamar.Microsoft.DependencyInjection 15.0.1")
+  Component(a_ClearMeasure_Bootcamp_UI_Client, "ClearMeasure.Bootcamp.UI.Client", $descr="BlazorMvc 2.1.1\nLamar.Microsoft.DependencyInjection 15.0.1\nMediatR 12.4.1\nMicrosoft.AspNetCore.Components.WebAssembly 10.0.0\nToolbelt.Blazor.SpeechRecognition 1.0.0\nToolbelt.Blazor.SpeechSynthesis 11.0.0")
+  Component(a_ClearMeasure_Bootcamp_UI_Shared, "ClearMeasure.Bootcamp.UI.Shared", $descr="BlazorMvc 2.1.1\nMediatR 12.4.1\nToolbelt.Blazor.SpeechRecognition 1.0.0\nToolbelt.Blazor.SpeechSynthesis 11.0.0")
+}
+Rel(process, a_ClearMeasure_Bootcamp_UI_Server, "starts")
+Rel(a_ClearMeasure_Bootcamp_UI_Server, a_ChurchBulletin_ServiceDefaults, "references")
+Rel(a_ClearMeasure_Bootcamp_UI_Server, a_ClearMeasure_Bootcamp_Core, "references")
+Rel(a_ClearMeasure_Bootcamp_UI_Server, a_ClearMeasure_Bootcamp_DataAccess, "references")
+Rel(a_ClearMeasure_Bootcamp_UI_Server, a_ClearMeasure_Bootcamp_LlmGateway, "references")
+Rel(a_ClearMeasure_Bootcamp_UI_Server, a_ClearMeasure_Bootcamp_McpServer, "references")
+Rel(a_ClearMeasure_Bootcamp_UI_Server, a_ClearMeasure_Bootcamp_UI_Api, "references")
+Rel(a_ClearMeasure_Bootcamp_UI_Server, a_ClearMeasure_Bootcamp_UI_Client, "references")
+Rel(a_ClearMeasure_Bootcamp_UI_Server, a_ClearMeasure_Bootcamp_UI_Shared, "references")
+Rel(a_ClearMeasure_Bootcamp_DataAccess, a_ClearMeasure_Bootcamp_Core, "references")
+Rel(a_ClearMeasure_Bootcamp_LlmGateway, a_ClearMeasure_Bootcamp_Core, "references")
+Rel(a_ClearMeasure_Bootcamp_McpServer, a_ChurchBulletin_ServiceDefaults, "references")
+Rel(a_ClearMeasure_Bootcamp_McpServer, a_ClearMeasure_Bootcamp_Core, "references")
+Rel(a_ClearMeasure_Bootcamp_McpServer, a_ClearMeasure_Bootcamp_DataAccess, "references")
+Rel(a_ClearMeasure_Bootcamp_McpServer, a_ClearMeasure_Bootcamp_LlmGateway, "references")
+Rel(a_ClearMeasure_Bootcamp_McpServer, a_ClearMeasure_Bootcamp_UI_Shared, "references")
+Rel(a_ClearMeasure_Bootcamp_UI_Api, a_ClearMeasure_Bootcamp_Core, "references")
+Rel(a_ClearMeasure_Bootcamp_UI_Client, a_ClearMeasure_Bootcamp_Core, "references")
+Rel(a_ClearMeasure_Bootcamp_UI_Client, a_ClearMeasure_Bootcamp_UI_Shared, "references")
+Rel(a_ClearMeasure_Bootcamp_UI_Shared, a_ClearMeasure_Bootcamp_Core, "references")
+Rel(a_ClearMeasure_Bootcamp_UI_Shared, a_ClearMeasure_Bootcamp_LlmGateway, "references")
+@enduml

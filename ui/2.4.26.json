@@ -1,0 +1,365 @@
+{
+  "deployable": "ui",
+  "version": "2.4.26",
+  "generated": "2026-10-13T04:29:12Z",
+  "kind": "container image",
+  "process": "dotnet ClearMeasure.Bootcamp.UI.Server.dll",
+  "entry": "ClearMeasure.Bootcamp.UI.Server",
+  "assemblies": [
+    {
+      "name": "ClearMeasure.Bootcamp.UI.Server",
+      "entry": true,
+      "references": [
+        "ChurchBulletin.ServiceDefaults",
+        "ClearMeasure.Bootcamp.Core",
+        "ClearMeasure.Bootcamp.DataAccess",
+        "ClearMeasure.Bootcamp.LlmGateway",
+        "ClearMeasure.Bootcamp.McpServer",
+        "ClearMeasure.Bootcamp.UI.Api",
+        "ClearMeasure.Bootcamp.UI.Client",
+        "ClearMeasure.Bootcamp.UI.Shared"
+      ],
+      "packages": [
+        {
+          "name": "Asp.Versioning.Http",
+          "version": "8.1.0"
+        },
+        {
+          "name": "Asp.Versioning.Mvc",
+          "version": "8.1.0"
+        },
+        {
+          "name": "FluentValidation.DependencyInjectionExtensions",
+          "version": "11.11.0"
+        },
+        {
+          "name": "Google.Protobuf",
+          "version": "3.27.0"
+        },
+        {
+          "name": "Grpc.AspNetCore",
+          "version": "2.70.0"
+        },
+        {
+          "name": "Lamar.Microsoft.DependencyInjection",
+          "version": "15.0.1"
+        },
+        {
+          "name": "Microsoft.AspNetCore.Components.WebAssembly.Server",
+          "version": "10.0.0"
+        },
+        {
+          "name": "ModelContextProtocol",
+          "version": "1.0.0"
+        },
+        {
+          "name": "ModelContextProtocol.AspNetCore",
+          "version": "1.0.0"
+        },
+        {
+          "name": "NServiceBus.Extensions.Hosting",
+          "version": "3.0.1"
+        },
+        {
+          "name": "OpenTelemetry.Instrumentation.AspNetCore",
+          "version": "1.15.2"
+        },
+        {
+          "name": "OpenTelemetry.Instrumentation.Http",
+          "version": "1.15.1"
+        },
+        {
+          "name": "OpenTelemetry.Instrumentation.Runtime",
+          "version": "1.15.1"
+        },
+        {
+          "name": "OpenTelemetry.Instrumentation.SqlClient",
+          "version": "1.15.2"
+        }
+      ]
+    },
+    {
+      "name": "ChurchBulletin.ServiceDefaults",
+      "entry": false,
+      "references": [],
+      "packages": [
+        {
+          "name": "Azure.Monitor.OpenTelemetry.AspNetCore",
+          "version": "1.6.0"
+        },
+        {
+          "name": "Microsoft.Extensions.Http.Resilience",
+          "version": "9.9.0"
+        },
+        {
+          "name": "Microsoft.Extensions.ServiceDiscovery",
+          "version": "9.5.0"
+        },
+        {
+          "name": "OpenTelemetry.Api",
+          "version": "1.15.3"
+        },
+        {
+          "name": "OpenTelemetry.Exporter.Console",
+          "version": "1.15.3"
+        },
+        {
+          "name": "OpenTelemetry.Exporter.OpenTelemetryProtocol",
+          "version": "1.15.3"
+        },
+        {
+          "name": "OpenTelemetry.Extensions.Hosting",
+          "version": "1.15.3"
+        },
+        {
+          "name": "OpenTelemetry.Instrumentation.AspNetCore",
+          "version": "1.15.2"
+        },
+        {
+          "name": "OpenTelemetry.Instrumentation.EntityFrameworkCore",
+          "version": "1.0.0-beta.12"
+        },
+        {
+          "name": "OpenTelemetry.Instrumentation.Http",
+          "version": "1.15.1"
+        },
+        {
+          "name": "OpenTelemetry.Instrumentation.Runtime",
+          "version": "1.15.1"
+        },
+        {
+          "name": "OpenTelemetry.Instrumentation.SqlClient",
+          "version": "1.15.2"
+        },
+        {
+          "name": "Serilog.AspNetCore",
+          "version": "9.0.0"
+        },
+        {
+          "name": "Serilog.Formatting.Compact",
+          "version": "3.0.0"
+        }
+      ]
+    },
+    {
+      "name": "ClearMeasure.Bootcamp.Core",
+      "entry": false,
+      "references": [],
+      "packages": [
+        {
+          "name": "FluentValidation",
+          "version": "11.11.0"
+        },
+        {
+          "name": "MediatR.Contracts",
+          "version": "2.0.1"
+        }
+      ]
+    },
+    {
+      "name": "ClearMeasure.Bootcamp.DataAccess",
+      "entry": false,
+      "references": [
+        "ClearMeasure.Bootcamp.Core"
+      ],
+      "packages": [
+        {
+          "name": "ClearMeasureLabs.HostedEndpoint.SqlServerTransport",
+          "version": "1.0.30"
+        },
+        {
+          "name": "MediatR",
+          "version": "12.4.1"
+        },
+        {
+          "name": "Microsoft.EntityFrameworkCore",
+          "version": "10.0.0"
+        },
+        {
+          "name": "Microsoft.EntityFrameworkCore.Sqlite",
+          "version": "10.0.0"
+        },
+        {
+          "name": "Microsoft.EntityFrameworkCore.SqlServer",
+          "version": "10.0.0"
+        },
+        {
+          "name": "NServiceBus.Persistence.Sql.TransactionalSession",
+          "version": "8.3.0"
+        },
+        {
+          "name": "SQLitePCLRaw.bundle_e_sqlite3",
+          "version": "2.1.12"
+        }
+      ]
+    },
+    {
+      "name": "ClearMeasure.Bootcamp.LlmGateway",
+      "entry": false,
+      "references": [
+        "ClearMeasure.Bootcamp.Core"
+      ],
+      "packages": [
+        {
+          "name": "Azure.AI.OpenAI",
+          "version": "2.1.0"
+        },
+        {
+          "name": "Azure.Core",
+          "version": "1.60.0"
+        },
+        {
+          "name": "MediatR",
+          "version": "12.4.1"
+        },
+        {
+          "name": "Microsoft.Extensions.AI",
+          "version": "9.7.0"
+        },
+        {
+          "name": "Microsoft.Extensions.AI.Abstractions",
+          "version": "10.3.0"
+        },
+        {
+          "name": "Microsoft.Extensions.AI.OpenAI",
+          "version": "9.7.1-preview.1.25365.4"
+        }
+      ]
+    },
+    {
+      "name": "ClearMeasure.Bootcamp.McpServer",
+      "entry": false,
+      "references": [
+        "ChurchBulletin.ServiceDefaults",
+        "ClearMeasure.Bootcamp.Core",
+        "ClearMeasure.Bootcamp.DataAccess",
+        "ClearMeasure.Bootcamp.LlmGateway",
+        "ClearMeasure.Bootcamp.UI.Shared"
+      ],
+      "packages": [
+        {
+          "name": "Lamar.Microsoft.DependencyInjection",
+          "version": "15.0.1"
+        },
+        {
+          "name": "MediatR",
+          "version": "12.4.1"
+        },
+        {
+          "name": "Microsoft.EntityFrameworkCore.Sqlite",
+          "version": "10.0.0"
+        },
+        {
+          "name": "Microsoft.EntityFrameworkCore.SqlServer",
+          "version": "10.0.0"
+        },
+        {
+          "name": "ModelContextProtocol",
+          "version": "1.0.0"
+        },
+        {
+          "name": "ModelContextProtocol.AspNetCore",
+          "version": "1.0.0"
+        },
+        {
+          "name": "OpenTelemetry.Instrumentation.AspNetCore",
+          "version": "1.15.2"
+        },
+        {
+          "name": "OpenTelemetry.Instrumentation.Http",
+          "version": "1.15.1"
+        },
+        {
+          "name": "OpenTelemetry.Instrumentation.Runtime",
+          "version": "1.15.1"
+        },
+        {
+          "name": "OpenTelemetry.Instrumentation.SqlClient",
+          "version": "1.15.2"
+        },
+        {
+          "name": "SQLitePCLRaw.bundle_e_sqlite3",
+          "version": "2.1.12"
+        }
+      ]
+    },
+    {
+      "name": "ClearMeasure.Bootcamp.UI.Api",
+      "entry": false,
+      "references": [
+        "ClearMeasure.Bootcamp.Core"
+      ],
+      "packages": [
+        {
+          "name": "Asp.Versioning.Abstractions",
+          "version": "8.1.0"
+        },
+        {
+          "name": "Lamar.Microsoft.DependencyInjection",
+          "version": "15.0.1"
+        }
+      ]
+    },
+    {
+      "name": "ClearMeasure.Bootcamp.UI.Client",
+      "entry": false,
+      "references": [
+        "ClearMeasure.Bootcamp.Core",
+        "ClearMeasure.Bootcamp.UI.Shared"
+      ],
+      "packages": [
+        {
+          "name": "BlazorMvc",
+          "version": "2.1.1"
+        },
+        {
+          "name": "Lamar.Microsoft.DependencyInjection",
+          "version": "15.0.1"
+        },
+        {
+          "name": "MediatR",
+          "version": "12.4.1"
+        },
+        {
+          "name": "Microsoft.AspNetCore.Components.WebAssembly",
+          "version": "10.0.0"
+        },
+        {
+          "name": "Toolbelt.Blazor.SpeechRecognition",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Toolbelt.Blazor.SpeechSynthesis",
+          "version": "11.0.0"
+        }
+      ]
+    },
+    {
+      "name": "ClearMeasure.Bootcamp.UI.Shared",
+      "entry": false,
+      "references": [
+        "ClearMeasure.Bootcamp.Core",
+        "ClearMeasure.Bootcamp.LlmGateway"
+      ],
+      "packages": [
+        {
+          "name": "BlazorMvc",
+          "version": "2.1.1"
+        },
+        {
+          "name": "MediatR",
+          "version": "12.4.1"
+        },
+        {
+          "name": "Toolbelt.Blazor.SpeechRecognition",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Toolbelt.Blazor.SpeechSynthesis",
+          "version": "11.0.0"
+        }
+      ]
+    }
+  ],
+  "truncated": false
+}
