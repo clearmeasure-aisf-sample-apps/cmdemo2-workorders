@@ -114,6 +114,20 @@ jobs:
           -BuiltAt '${{ github.event.workflow_run.updated_at }}'
           -Package 'octopus-packages/${{ vars.SYSTEM_SLUG }}-${{ vars.DEPLOYABLE_NAME }}.${{ steps.version.outputs.version }}.zip'
 
+      # The private build's word (the kit's decision 0046): the one command that built this artifact wrote
+      # private-build.json in the Build run, which kept it as artifact "private-build". The object "build" of the
+      # facts is that command, run by the integration build, at the Build run's address. A Build that keeps no such
+      # artifact leaves the facts as they are, with a SKIP line: nothing fails.
+      - name: Take the private build's word into the facts
+        if: hashFiles('.github/private-build/add-private-build.ps1') != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download ${{ github.event.workflow_run.id }} --name private-build --dir word 2>&1 | Out-Null
+          $package = 'octopus-packages/${{ vars.SYSTEM_SLUG }}-${{ vars.DEPLOYABLE_NAME }}.${{ steps.version.outputs.version }}.zip'
+          ./.github/private-build/add-private-build.ps1 -Package $package -Word word/private-build.json -Run '${{ github.event.workflow_run.html_url }}'
+
       - name: Sign in to Octopus
         uses: OctopusDeploy/login@v2
         with:
